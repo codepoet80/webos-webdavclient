@@ -4,6 +4,7 @@ function davApi() {
     this.protocol = "";
     this.username = "";
     this.password = "";
+    this.sessionCookie = "";
 
     // Initializieren der Klasse
     this.init = function(server, serverpath, port, protocol, username, password) {
@@ -31,19 +32,18 @@ function davApi() {
 
         var request = new XMLHttpRequest();
 
-        // the path have to end with a slash "/"		
-        if (path.lastIndexOf("/") + 1 < path.length) {
-            path = path + "/";
-        }
-        if (this.serverpath && this.serverpath != "" && this.serverpath != "/")
+        if (this.serverpath && this.serverpath != "" && this.serverpath != "/" && path.indexOf(this.serverpath) == -1)
             path = this.serverpath + "/" + path;
-
+        // the path have to end with a slash "/" -- but only one!		
+        path = path.replace(/\/+$/, '') + '/';
+ 
         var openPath = this.protocol + "://" + this.server + "/" + encodeURI(path);
         enyo.log('PROPFIND ' + openPath);
         request.open('PROPFIND', openPath, true);
         request.setRequestHeader('Depth', 1);
         request.setRequestHeader('Content-Type', 'application/x-www-form-escaped');
-        request.setRequestHeader("Authorization", "Basic " + btoa(this.username + ":" + this.password))
+        request.setRequestHeader("Authorization", "Basic " + btoa(this.username + ":" + this.password));
+        request.setRequestHeader('Origin', 'http://localhost'); //over-ride webOS app-based origin so ownCloud/nextCloud don't block us
             // Es muss ein bestimmtes XML Format an den Server gesendet werden, um entsprechende Rueckmeldung zu bekommen
         var xml = '<?xml version="1.0" encoding="utf-8" ?><D:propfind xmlns:D="DAV:"><D:allprop /></D:propfind>';
 
@@ -53,6 +53,10 @@ function davApi() {
                 // Response Elemente laden und in der schleife durchlaufen um die sich darunter befindlichen Daten auszulesen 
                 enyo.log("response status: " + request.status + "," + request.statusText);
                 if (request.status >= 200 && request.status < 300) {
+                    this.sessionCookie = request.getResponseHeader("Set-Cookie");
+                    this.sessionCookie = this.sessionCookie.split(';')[0];
+                    enyo.log("Received session cookie: " + this.sessionCookie);
+
                     if (request.responseXML) {
                         // Check if the response is a old rfc implementation or a new one.
                         var xmltype = request.responseXML.getElementsByTagName("multistatus")[0].getAttribute("xmlns:s");
@@ -146,7 +150,8 @@ function davApi() {
                         }
                         // Aufrufen der uebergebenen Funktion
                         enyo.log("Finished parsing data for " + dirListData.length + " files");
-                        handler(dirListData, request.readyState);
+                        enyo.log("calling handler, passing sessionCookie: " + this.sessionCookie);
+                        handler(dirListData, request.readyState, this.sessionCookie);
                     }
                 } else {
                     enyo.log("Unexpected HTTP response to directory list!");
@@ -176,6 +181,7 @@ function davApi() {
         request.open('GET', this.protocol + "://" + this.server + encodeURI(file), true);
         request.setRequestHeader('Depth', 0);
         request.setRequestHeader('Content-Type', contenttype);
+        request.setRequestHeader('Origin', 'http://localhost'); //over-ride webOS app-based origin so ownCloud/nextCloud don't block us
 
         request.onreadystatechange = function() {
             // Request war erfolgreich
@@ -186,6 +192,10 @@ function davApi() {
             }
         }
         request.send();
+    }
+
+    this.getSessionCookie = function() {
+        return this.sessionCookie;
     }
 
 
@@ -206,6 +216,7 @@ function davApi() {
             if (request.readyState == 4) {
                 if (request.responseText) {
                     var xmlRequest = request.responseXML.getElementsByTagName("response");
+                    request.setRequestHeader('Origin', 'http://localhost'); //over-ride webOS app-based origin so ownCloud/nextCloud don't block us
 
                     // Speichern der Dateistruktur in einem JSON Object
                     var response = [];
@@ -234,6 +245,7 @@ function davApi() {
     this.createDir = function(file, handler) {
         var request = new XMLHttpRequest();
         request.open('MKCOL', this.protocol + "://" + this.server + encodeURI(file), true);
+        request.setRequestHeader('Origin', 'http://localhost'); //over-ride webOS app-based origin so ownCloud/nextCloud don't block us
 
         request.onreadystatechange = function() {
             // Request war erfolgreich
@@ -257,6 +269,7 @@ function davApi() {
         var request = new XMLHttpRequest();
         request.open('PUT', this.protocol + "://" + this.server + encodeURI(filepath), true);
         request.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+        request.setRequestHeader('Origin', 'http://localhost'); //over-ride webOS app-based origin so ownCloud/nextCloud don't block us
         request.onreadystatechange = function() {
             // Request war erfolgreich
             if (request.readyState == 4) {
