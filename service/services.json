@@ -1,0 +1,46 @@
+{
+    "id": "com.aventer.webdavclientlite.service",
+    "description": "WebDAV Client File Transfer Service",
+    "commandTimeout": 600000,
+    "services": [{
+        "name": "com.aventer.webdavclientlite.service",
+        "description": "Authenticated file transfers via curl/wget",
+        "commands": [{
+            "name": "status",
+            "assistant": "StatusAssistant",
+            "public": true
+        }, {
+            "name": "version",
+            "assistant": "VersionAssistant",
+            "public": true
+        }, {
+            "name": "download",
+            "assistant": "DownloadAssistant",
+            "public": true
+        }, {
+            "name": "upload",
+            "assistant": "UploadAssistant",
+            "public": true
+        }, {
+            "name": "mkdir",
+            "assistant": "MkdirAssistant",
+            "public": true
+        }, {
+            "name": "delete",
+            "assistant": "DeleteAssistant",
+            "public": true
+        }, {
+            "name": "list",
+            "assistant": "ListAssistant",
+            "public": true
+        }, {
+            "name": "getPrefs",
+            "assistant": "GetPrefsAssistant",
+            "public": true
+        }, {
+            "name": "setPrefs",
+            "assistant": "SetPrefsAssistant",
+            "public": true
+        }]
+    }]
+}

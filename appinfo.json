@@ -1,9 +1,12 @@
 {
     "id": "com.aventer.webdavclientlite",
-    "version": "0.5.0",
+    "version": "0.7.0",
     "vendor": "avEnter, codepoet",
     "type": "web",
     "main": "index.html",
     "title": "WebDAV Client",
-    "uiRevision": "2"
+    "icon": "icon.png",
+	"splashicon": "icon-256.png",
+    "uiRevision": "2",
+    "serviceId": "com.aventer.webdavclientlite.service"
 }

@@ -1,0 +1,10 @@
+{
+    "id": "com.aventer.webdavclientlite",
+    "package_format_version": 2,
+    "loc_name": "WebDAV Client",
+    "version": "0.6.0",
+    "vendor": "avEnter, codepoet",
+    "vendor_url": "",
+    "app": "com.aventer.webdavclientlite",
+    "services": ["com.aventer.webdavclientlite.service"]
+}

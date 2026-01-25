@@ -4,8 +4,12 @@ enyo.kind({
 
     dirListData: [], // Das JSON Data Array für die Datei und Verzeichnisliste
 
-    // Die WebDav Api  
+    // Die WebDav Api
     davReq: new davApi(),
+    // Native service for file transfers
+    webdavService: new WebDavService(),
+    // Service availability flag
+    serviceAvailable: false,
     // Der Aktuell ausgewaehlte Server   
     currentServer: [],
     // Das aktuell ausgwaehlte Datei Object   
@@ -76,12 +80,9 @@ enyo.kind({
                 ]},
                 { kind: "Toolbar", components: [
                     { kind: "GrabButton" },
-                    { kind: "HFlexBox", components: [
-                        { kind: "ToolButton", icon: "images/back.png", onclick: "btnClickDirListBack" },
-                        { kind: "ToolButton", icon: "images/refresh.png", onclick: "btnClickRefreshNavigator" },
-                        //{ kind: "ToolButton", icon: "images/document-new.png", onclick: "btnClickShowUploadFilePicker" },
-                        //{ kind: "ToolButton", icon: "images/folder-new.png", onclick: "btnClickShowNewFolderDialog" }
-                    ]}
+                    { kind: "ToolButton", icon: "images/back.png", onclick: "btnClickDirListBack" },
+                    { kind: "ToolButton", icon: "images/refresh.png", onclick: "btnClickRefreshNavigator" },
+                    { kind: "ToolButton", icon: "images/document-new.png", onclick: "btnClickShowUploadFilePicker" }
                 ]}
             ]}
         ]},
@@ -100,6 +101,10 @@ enyo.kind({
                         { kind: "Input", name: "serverpath", disabled: false, spellcheck: false, autoWordComplete: false, autoCapitalize: "lowercase", hint: "Server Path (optional)" },
                         { kind: "Input", name: "username", spellcheck: false, autoWordComplete: false, autoCapitalize: "lowercase", hint: "Username" },
                         { kind: "PasswordInput", name: "password", spellcheck: false, autoWordComplete: false, hint: "Password" },
+                        { kind: "HFlexBox", align: "center", style: "padding-top:10px;", components: [
+                            { kind: "CheckBox", name: "useProxyCheckbox", checked: true },
+                            { content: "Use System Proxy", style: "font-size:14px; padding-left:10px;" }
+                        ]}
                     ]}
                 ]},
                 { kind: "HFlexBox", align: "middle", components: [
@@ -162,10 +167,22 @@ enyo.kind({
     // Daten der angelegten Server (Format: JSON)
     serverData: [],
 
-    // Programmstart  
+    // Programmstart
     initializeWebDavClient: function(inSender) {
         // Konfiguration Laden. Wenn die DB noch nicht existiert, wird diese erstellt
         this.environment = enyo.fetchDeviceInfo();
+
+        // Check if native service is available
+        var self = this;
+        this.webdavService.checkAvailable(function(available) {
+            self.serviceAvailable = available;
+            if (available) {
+                enyo.log("Native WebDAV service is available - using curl/wget for transfers");
+            } else {
+                enyo.warn("Native WebDAV service not available - falling back to XHR");
+            }
+        });
+
         this.loadPrefs();
     },
 
@@ -279,17 +296,35 @@ enyo.kind({
 
     // Ausgewaehlte Datei einlesen
     uploadFilePickerResponse: function(inSender, inFile) {
-        if (inFile !== 'undefined') {
+        if (inFile !== 'undefined' && inFile.length > 0) {
             var filename = inFile[0].fullPath.split("/");
-            this.$.fileSend.call({
-                sourceFile: inFile[0].fullPath,
-                username: this.currentServer.username,
-                password: this.currentServer.password,
+            var targetFilename = filename[filename.length - 1];
+            var self = this;
+
+            this.$.spinner.show();
+
+            // Use native service for upload
+            this.webdavService.upload({
+                localPath: inFile[0].fullPath,
                 protocol: this.currentServer.protocol,
                 server: this.currentServer.servername,
-                serverpath: this.currentServer.serverpath,
                 port: this.currentServer.port,
-                path: encodeURI(this.currentPath + "/" + filename[filename.length - 1])
+                serverpath: this.currentServer.serverpath,
+                path: this.currentPath + "/" + targetFilename,
+                username: this.currentServer.username,
+                password: this.currentServer.password,
+                useProxy: this.currentServer.useProxy !== false
+            }, function(response) {
+                // Success
+                self.$.spinner.hide();
+                enyo.windows.addBannerMessage("Upload complete!", "{}");
+                // Refresh directory listing
+                doGetDirList(self.currentPath, getDirListContent);
+            }, function(response) {
+                // Failure
+                self.$.spinner.hide();
+                var errorMsg = response.errorText || "Upload failed";
+                self.showInfoMessage("Error: " + errorMsg);
             });
         }
     },
@@ -414,18 +449,66 @@ enyo.kind({
             path = servername.slice(servername.indexOf("/"), servername.length);
             servername = servername.slice(0, servername.indexOf("/")); //remove trailing slash from server name if present
         }
-        var usePath = this.currentServer.serverpath + encodeURI(this.currentItem.path)
-        var useTarget = this.currentServer.protocol + "://" + encodeURI(this.currentServer.username).replace("@", "%40") + ":" + encodeURI(this.currentServer.password).replace("@", "%40") + "@" + servername + ":" + this.currentServer.port + usePath;
-        enyo.log("Trying get file with target: " + useTarget + " to " + this.targetDir + "/" + this.currentItem.filename);
 
-        this.$.fileDownload.call({
-            target: useTarget,
-            mime: this.currentItem.contenttype,
-            targetDir: this.targetDir,
-            targetFilename: this.currentItem.filename,
-            canHandlePause: false,
-            subscribe: true
-        });
+        var localPath = this.targetDir + "/" + this.currentItem.filename;
+
+        // Use native service if available (fixes authentication issue)
+        if (this.serviceAvailable) {
+            enyo.log("Using native service for download to: " + localPath);
+            var self = this;
+
+            // Note: currentItem.path already contains the full path including serverpath
+            // So we pass it directly without serverpath to avoid duplication
+            this.webdavService.download({
+                protocol: this.currentServer.protocol,
+                server: servername,
+                port: this.currentServer.port,
+                serverpath: "",
+                path: this.currentItem.path,
+                localPath: localPath,
+                username: this.currentServer.username,
+                password: this.currentServer.password,
+                useProxy: this.currentServer.useProxy !== false
+            }, function(response) {
+                // Success
+                self.$.spinner.hide();
+                self.$.fileDownloadProgressBar.setPosition(100);
+                enyo.windows.addBannerMessage("Download complete!", "{}");
+                self.$.fileActionDialog.close();
+
+                // Open file if requested
+                if (self.fileOpen) {
+                    enyo.log("Opening downloaded file: " + localPath);
+                    self.$.fileOpen.call({ target: localPath });
+                    self.fileOpen = false;
+                }
+                self.renderDirListItem(inSender, self.selectedDirItem, true);
+            }, function(response) {
+                // Failure
+                self.$.spinner.hide();
+                self.$.fileActionDialog.close();
+                self.fileOpen = false;
+                var errorMsg = response.errorText || "Download failed";
+                enyo.windows.addBannerMessage("Download failed!", "{}");
+                self.showInfoMessage("Error: " + errorMsg);
+                self.renderDirListItem(inSender, self.selectedDirItem, true);
+            });
+        } else {
+            // Fallback to download manager (may not work with auth)
+            var usePath = this.currentServer.serverpath + encodeURI(this.currentItem.path);
+            var useTarget = this.currentServer.protocol + "://" + encodeURI(this.currentServer.username).replace("@", "%40") + ":" + encodeURI(this.currentServer.password).replace("@", "%40") + "@" + servername + ":" + this.currentServer.port + usePath;
+            enyo.log("Fallback: Trying get file with target: " + useTarget + " to " + localPath);
+
+            // Note: This doesn't work reliably on webOS - credentials aren't getting passed properly
+            this.$.fileDownload.call({
+                target: useTarget,
+                mime: this.currentItem.contenttype,
+                targetDir: this.targetDir,
+                targetFilename: this.currentItem.filename,
+                canHandlePause: false,
+                subscribe: true
+            });
+        }
     },
     
     // Anzeigen der Progressbar und setzen der Position  
@@ -482,10 +565,12 @@ enyo.kind({
         this.fileOpen = false;
         // Wenn gerade am downloaden ist, den download abbrechen
         if (this.downloadTicket) {
+            // Legacy download manager cancel
             this.$.fileDownloadCancel.call({ ticket: this.downloadTicket});
             this.downloadTicket = null;
             this.$.fileDownloadProgressBar.setPosition(1);
         } else {
+            // Native service downloads run to completion (can't be cancelled easily)
             this.$.fileActionDialog.close();
             this.renderDirListItem(inSender, this.selectedDirItem, true);
         }
@@ -523,7 +608,7 @@ enyo.kind({
                     this.currentPath = item.path;
                     this.currentItem = null;
                     this.$.spinner.show();
-                    this.davReq.getDirList(item.path, getDirListContent);
+                    doGetDirList(item.path, getDirListContent);
                     this.selectedDirItem = null;
                     webdav.$.dirListScroller.scrollTo(0,0);
                 } else {
@@ -561,7 +646,7 @@ enyo.kind({
     btnClickRefreshNavigator: function(inSender, inEvent) {
         if (this.connected) {
             this.$.spinner.show();
-            this.davReq.getDirList(this.currentPath, getDirListContent);
+            doGetDirList(this.currentPath, getDirListContent);
         }
     },
 
@@ -570,7 +655,7 @@ enyo.kind({
         if (this.connected) {
             this.$.spinner.show();
             this.currentPath = this.currentPath.substring(0, this.currentPath.lastIndexOf("/"));
-            this.davReq.getDirList(this.currentPath, getDirListContent);
+            doGetDirList(this.currentPath, getDirListContent);
             webdav.$.dirListScroller.scrollTo(0,0);
         }
     },
@@ -652,6 +737,7 @@ enyo.kind({
             this.$.password.setValue("");
             this.$.protocol.setValue("http");
             this.$.port.setValue("80");
+            this.$.useProxyCheckbox.setChecked(true); // Default to using proxy for new servers
             this.$.servername.setStyle("visibility:visible")
 
         } else {
@@ -663,6 +749,9 @@ enyo.kind({
             this.$.password.setValue(this.serverData[this.selectedServerItem].password);
             this.$.protocol.setValue(this.serverData[this.selectedServerItem].protocol);
             this.$.port.setValue(this.serverData[this.selectedServerItem].port);
+            // Use saved useProxy value, default to true for backwards compatibility
+            var useProxy = this.serverData[this.selectedServerItem].useProxy;
+            this.$.useProxyCheckbox.setChecked(useProxy !== false);
 
             this.$.servername.disabled = true;
         }
@@ -678,6 +767,7 @@ enyo.kind({
         nvPassword = this.$.password.getValue();
         nvProtocol = this.$.protocol.getValue();
         nvPort = this.$.port.getValue();
+        nvUseProxy = this.$.useProxyCheckbox.getChecked();
 
         // Neuen Server Speichern oder aktualisieren
         if (!this.changeServer) {
@@ -686,7 +776,7 @@ enyo.kind({
             var itemPos = this.selectedServerItem;
         }
         // Eingaben in ein Array schreiben
-        this.serverData[itemPos] = { servername: nvServername, serverpath: nvServerpath, name: nvItemName, username: nvUsername, password: nvPassword, protocol: nvProtocol, port: nvPort };
+        this.serverData[itemPos] = { servername: nvServername, serverpath: nvServerpath, name: nvItemName, username: nvUsername, password: nvPassword, protocol: nvProtocol, port: nvPort, useProxy: nvUseProxy };
         Prefs.setCookie("serverlist", this.serverData);
 
         this.$.serverList.renderRow(itemPos);
@@ -732,7 +822,7 @@ enyo.kind({
 
     // Info Message Fenster mit uebergebenen error Object oeffnen  
     showAboutMessage: function(inTrans, inError) {
-        this.showInfoMessage("WebDAV Client: Original code by Aventer, updates by codepoet, 2022.");
+        this.showInfoMessage("WebDAV Client: Original code by Aventer, updates by codepoet in 2022, and codepoet and Starkka15 in 2026.");
     },
 
     // Info Message Fenster mit uebergebenen Text oeffnen
@@ -753,7 +843,7 @@ enyo.kind({
         }
 
         this.davReq.init(servername, serverpath, port, protocol, username, password);
-        this.davReq.getDirList(path, getDirListContent);
+        doGetDirList(path, getDirListContent);
     },
 
 });
@@ -776,6 +866,115 @@ function getDirListContent(content, requestState) {
     }
 }
 
+// Wrapper for directory listing that uses native service (curl)
+function doGetDirList(path, handler) {
+    // Use per-server useProxy setting, default to true for backwards compatibility
+    var useProxy = webdav.currentServer.useProxy !== false;
+
+    if (webdav.serviceAvailable) {
+        enyo.log("Using native service for directory listing (curl, useProxy=" + useProxy + ")");
+        // Don't pass serverpath if path already contains it (to avoid duplication)
+        var serverpath = "";
+        if (path.indexOf(webdav.currentServer.serverpath) === -1) {
+            serverpath = webdav.currentServer.serverpath;
+        }
+        webdav.webdavService.list({
+            protocol: webdav.currentServer.protocol,
+            server: webdav.currentServer.servername,
+            port: webdav.currentServer.port,
+            serverpath: serverpath,
+            path: path,
+            username: webdav.currentServer.username,
+            password: webdav.currentServer.password,
+            useProxy: useProxy
+        }, function(response) {
+            // Parse XML response
+            if (response.response) {
+                var parser = new DOMParser();
+                var xmlDoc = parser.parseFromString(response.response, "application/xml");
+                var dirListData = parseWebDAVResponse(xmlDoc, webdav.currentServer.serverpath);
+                handler(dirListData, 4);
+            } else {
+                handler("error", -1);
+            }
+        }, function(error) {
+            enyo.warn("Native service list failed: " + JSON.stringify(error));
+            handler("error", error.errorCode || -1);
+        });
+    } else {
+        enyo.log("Using XHR for directory listing (service not available)");
+        webdav.davReq.getDirList(path, handler);
+    }
+}
+
+// Parse WebDAV XML response from native service
+function parseWebDAVResponse(xmlDoc, serverpath) {
+    var dirListData = [];
+    var responses = xmlDoc.getElementsByTagName("response");
+
+    // Determine XML type
+    var multistatus = xmlDoc.getElementsByTagName("multistatus")[0];
+    var xmltype = multistatus && multistatus.getAttribute("xmlns:s") ? "RFC2518" : "RFC4437";
+    enyo.log("Parsing native service response using type: " + xmltype);
+
+    for (var i = 1; i < responses.length; i++) {
+        try {
+            var hrefValue = responses[i].getElementsByTagName("href")[0].firstChild.nodeValue;
+            var getlastmodifiedValue = "";
+            try {
+                getlastmodifiedValue = responses[i].getElementsByTagName("getlastmodified")[0].firstChild.nodeValue;
+                getlastmodifiedValue = formatDateString(Date.parse(getlastmodifiedValue));
+            } catch (e) {
+                getlastmodifiedValue = "unknown";
+            }
+
+            var creationdateValue = getlastmodifiedValue;
+            var getcontentlength = "";
+            try {
+                getcontentlength = responses[i].getElementsByTagName("getcontentlength")[0].firstChild.nodeValue;
+                getcontentlength = Math.round((getcontentlength / 1024) * 100) / 100 + " KB";
+            } catch (e) {}
+
+            var getcontenttypeValue = "";
+            try {
+                getcontenttypeValue = responses[i].getElementsByTagName("getcontenttype")[0].firstChild.nodeValue;
+            } catch (e) {
+                if (responses[i].getElementsByTagName("collection")[0]) {
+                    getcontenttypeValue = "httpd/unix-directory";
+                } else {
+                    getcontenttypeValue = getContentType(hrefValue);
+                }
+            }
+
+            // Normalize href (remove trailing slash for parsing filename)
+            if (hrefValue.length > 1 && hrefValue.lastIndexOf("/") == hrefValue.length - 1) {
+                hrefValue = hrefValue.substring(0, hrefValue.lastIndexOf("/"));
+            }
+
+            var hrefNorm = hrefValue.split("/");
+            var filename = decodeURI(hrefNorm[hrefNorm.length - 1]);
+
+            // Hide dot files
+            if (filename.indexOf(".") != 0) {
+                dirListData.push({
+                    path: decodeURI(hrefValue),
+                    filename: filename,
+                    creationdate: creationdateValue,
+                    lastmodified: getlastmodifiedValue,
+                    contenttype: getcontenttypeValue,
+                    contentlength: getcontentlength,
+                    fulldata: responses[i]
+                });
+            }
+        } catch (e) {
+            enyo.warn("Error parsing response item: " + e);
+        }
+    }
+
+    enyo.log("Parsed " + dirListData.length + " items from native service response");
+    return dirListData;
+}
+
 // request Handler fuer das auswerten des Rueckgabecodes des loeschvorganges
 function getDeleteDirListItemResponse(content) {
     // Bei dem getesteten webdav server, gab es hier nie response
@@ -784,12 +983,12 @@ function getDeleteDirListItemResponse(content) {
 // request Handler fuer das anlegen eines neuen Verzeichnisses
 function getCreateFolderRequest(content) {
     // Bei dem getesteten webdav server, gab es hier nie response
-    webdav.davReq.getDirList(webdav.currentPath, getDirListContent);
+    doGetDirList(webdav.currentPath, getDirListContent);
 }
 
 // request Handler fuer das uploaden einer Datei
 function uploadFileSuccess(content) {
-    webdav.davReq.getDirList(webdav.currentPath, getDirListContent);
+    doGetDirList(webdav.currentPath, getDirListContent);
 }
 
 // Die eigentliche encodeURI Version scheint unter webos nicht wirklich zu funktionieren, daher diese hier

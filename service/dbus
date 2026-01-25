@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=com.aventer.webdavclientlite.service
+Exec=/usr/bin/run-js-service -n /media/cryptofs/apps/usr/palm/services/com.aventer.webdavclientlite.service
+Type=dynamic

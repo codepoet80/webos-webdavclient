@@ -1,0 +1,47 @@
+#!/bin/sh
+
+# Post-installation script for WebDAV Client
+# Copies service files and registers the D-BUS service
+
+APP_NAME="com.aventer.webdavclientlite"
+SERVICE_NAME="com.aventer.webdavclientlite.service"
+APP_PATH="/media/cryptofs/apps/usr/palm/applications/${APP_NAME}"
+SERVICE_PATH="/media/cryptofs/apps/usr/palm/services/${SERVICE_NAME}"
+DBUS_PRV="/var/palm/ls2/services/prv"
+DBUS_PUB="/var/palm/ls2/services/pub"
+
+# Create service directory if it doesn't exist
+mkdir -p "${SERVICE_PATH}"
+
+# Copy service files from app directory to services directory
+if [ -d "${APP_PATH}/service" ]; then
+    cp "${APP_PATH}/service/"*.js "${SERVICE_PATH}/"
+    cp "${APP_PATH}/service/"*.json "${SERVICE_PATH}/"
+    cp "${APP_PATH}/service/dbus" "${SERVICE_PATH}/"
+    echo "Service files copied to ${SERVICE_PATH}"
+else
+    echo "Warning: App service directory not found at ${APP_PATH}/service"
+fi
+
+# Register D-BUS service
+if [ -f "${SERVICE_PATH}/dbus" ]; then
+    cp "${SERVICE_PATH}/dbus" "${DBUS_PRV}/${SERVICE_NAME}.service"
+    cp "${SERVICE_PATH}/dbus" "${DBUS_PUB}/${SERVICE_NAME}.service"
+
+    # Set permissions
+    chmod 644 "${DBUS_PRV}/${SERVICE_NAME}.service"
+    chmod 644 "${DBUS_PUB}/${SERVICE_NAME}.service"
+
+    echo "D-BUS service registered successfully"
+else
+    echo "Warning: D-BUS service file not found"
+fi
+
+# Set service directory permissions
+if [ -d "${SERVICE_PATH}" ]; then
+    chmod 755 "${SERVICE_PATH}"
+    chmod 644 "${SERVICE_PATH}"/*.js 2>/dev/null
+    chmod 644 "${SERVICE_PATH}"/*.json 2>/dev/null
+fi
+
+exit 0

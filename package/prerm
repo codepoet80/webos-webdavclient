@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# Pre-removal script for WebDAV Client
+# Unregisters the D-BUS service and removes service files
+
+SERVICE_NAME="com.aventer.webdavclientlite.service"
+SERVICE_PATH="/media/cryptofs/apps/usr/palm/services/${SERVICE_NAME}"
+DBUS_PRV="/var/palm/ls2/services/prv"
+DBUS_PUB="/var/palm/ls2/services/pub"
+
+# Remove D-BUS service registration files
+rm -f "${DBUS_PRV}/${SERVICE_NAME}.service"
+rm -f "${DBUS_PUB}/${SERVICE_NAME}.service"
+
+# Remove service directory (created by postinst)
+rm -rf "${SERVICE_PATH}"
+
+echo "WebDAV service unregistered and removed"
+
+exit 0
