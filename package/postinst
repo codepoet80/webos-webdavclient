@@ -5,10 +5,21 @@
 
 APP_NAME="com.aventer.webdavclient"
 SERVICE_NAME="com.aventer.webdavclient.service"
+OLD_SERVICE_NAME="com.aventer.webdavclientlite.service"
 APP_PATH="/media/cryptofs/apps/usr/palm/applications/${APP_NAME}"
 SERVICE_PATH="/media/cryptofs/apps/usr/palm/services/${SERVICE_NAME}"
+OLD_SERVICE_PATH="/media/cryptofs/apps/usr/palm/services/${OLD_SERVICE_NAME}"
 DBUS_PRV="/var/palm/ls2/services/prv"
 DBUS_PUB="/var/palm/ls2/services/pub"
+ROLES_PRV="/var/palm/ls2/roles/prv"
+ROLES_PUB="/var/palm/ls2/roles/pub"
+
+# Clean up old "lite" service if it exists (safe no-ops if not present)
+rm -rf "${OLD_SERVICE_PATH}" 2>/dev/null || true
+rm -f "${DBUS_PRV}/${OLD_SERVICE_NAME}.service" 2>/dev/null || true
+rm -f "${DBUS_PUB}/${OLD_SERVICE_NAME}.service" 2>/dev/null || true
+rm -f "${ROLES_PRV}/${OLD_SERVICE_NAME}.json" 2>/dev/null || true
+rm -f "${ROLES_PUB}/${OLD_SERVICE_NAME}.json" 2>/dev/null || true
 
 # Remove old service files to ensure clean update
 rm -rf "${SERVICE_PATH}"
@@ -29,6 +40,14 @@ fi
 
 # Register D-BUS service
 if [ -f "${SERVICE_PATH}/dbus" ]; then
+    # Create D-BUS directories if they don't exist
+    mkdir -p "${DBUS_PRV}"
+    mkdir -p "${DBUS_PUB}"
+
+    # Remove incorrect D-BUS files created by palm-package (missing Type=dynamic)
+    rm -f "${DBUS_PRV}/${SERVICE_NAME}" 2>/dev/null || true
+    rm -f "${DBUS_PUB}/${SERVICE_NAME}" 2>/dev/null || true
+
     cp -f "${SERVICE_PATH}/dbus" "${DBUS_PRV}/${SERVICE_NAME}.service"
     cp -f "${SERVICE_PATH}/dbus" "${DBUS_PUB}/${SERVICE_NAME}.service"
 
@@ -36,10 +55,30 @@ if [ -f "${SERVICE_PATH}/dbus" ]; then
     chmod 644 "${DBUS_PRV}/${SERVICE_NAME}.service"
     chmod 644 "${DBUS_PUB}/${SERVICE_NAME}.service"
 
-    echo "D-BUS service registered successfully"
+    echo "D-BUS service registered:"
+    echo "  ${DBUS_PRV}/${SERVICE_NAME}.service"
+    echo "  ${DBUS_PUB}/${SERVICE_NAME}.service"
 else
     echo "ERROR: D-BUS service file not found"
     exit 1
+fi
+
+# Install Luna Service Bus role files (for permissions)
+if [ -f "${SERVICE_PATH}/roles.json" ]; then
+    mkdir -p "${ROLES_PRV}"
+    mkdir -p "${ROLES_PUB}"
+
+    cp -f "${SERVICE_PATH}/roles.json" "${ROLES_PRV}/${SERVICE_NAME}.json"
+    cp -f "${SERVICE_PATH}/roles.json" "${ROLES_PUB}/${SERVICE_NAME}.json"
+
+    chmod 644 "${ROLES_PRV}/${SERVICE_NAME}.json"
+    chmod 644 "${ROLES_PUB}/${SERVICE_NAME}.json"
+
+    echo "Role files installed:"
+    echo "  ${ROLES_PRV}/${SERVICE_NAME}.json"
+    echo "  ${ROLES_PUB}/${SERVICE_NAME}.json"
+else
+    echo "WARNING: Role file not found - service may have permission issues"
 fi
 
 # Set service directory permissions
@@ -47,8 +86,14 @@ chmod 755 "${SERVICE_PATH}"
 chmod 644 "${SERVICE_PATH}"/*.js 2>/dev/null
 chmod 644 "${SERVICE_PATH}"/*.json 2>/dev/null
 
-# Restart the service if it's running (to pick up new code)
+# Restart any running node services (to pick up new code)
 killall -q node 2>/dev/null || true
+
+# Scan for new services
+if [ -x /usr/bin/ls-control ]; then
+    echo "Rescanning services..."
+    /usr/bin/ls-control scan-services 2>/dev/null || true
+fi
 
 echo "WebDAV Client service installation complete"
 exit 0

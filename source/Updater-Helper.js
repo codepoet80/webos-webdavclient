@@ -138,11 +138,15 @@ enyo.kind({
         if (inResponse && inResponse["com.palm.properties.nduid"])
             this.deviceId = inResponse["com.palm.properties.nduid"];
 
-        var newUrl = this.$.updateServiceCheck.url + this.appName;
+        var newUrl = this.$.updateServiceCheck.url + this.appName + "/" + enyo.fetchAppInfo().version;
         newUrl = newUrl + "&clientid=" + this.deviceId;
         newUrl = newUrl + "&device=" + encodeURIComponent(deviceData);
         
+        if (location.protocol == 'https:') {
+            newUrl = newUrl.replace("http://", "https://");
+        }
         enyo.log("Update Helper is checking for updates with URL: " + newUrl);
+
         this.$.updateServiceCheck.setUrl(newUrl);
         this.$.updateServiceCheck.call();
     },
@@ -157,7 +161,7 @@ enyo.kind({
             if (this.isVersionHigher(currVersion, museumVersion)) {
                 enyo.log("Updater Helper found an update in webOS App Museum II!");
                 this.VersionNote = inResponse.versionNote;
-                this.doUpdateFound();
+                this.doUpdateFound(this.VersionNote);
                 if (this.handleUI) {
                     enyo.log("Updater Helper is handling UI for user prompt.");
                     this.PromptUserForUpdate(this.VersionNote);

@@ -4,16 +4,34 @@
 # Unregisters the D-BUS service and removes service files
 
 SERVICE_NAME="com.aventer.webdavclient.service"
+OLD_SERVICE_NAME="com.aventer.webdavclientlite.service"
 SERVICE_PATH="/media/cryptofs/apps/usr/palm/services/${SERVICE_NAME}"
+OLD_SERVICE_PATH="/media/cryptofs/apps/usr/palm/services/${OLD_SERVICE_NAME}"
 DBUS_PRV="/var/palm/ls2/services/prv"
 DBUS_PUB="/var/palm/ls2/services/pub"
+ROLES_PRV="/var/palm/ls2/roles/prv"
+ROLES_PUB="/var/palm/ls2/roles/pub"
 
 # Remove D-BUS service registration files
 rm -f "${DBUS_PRV}/${SERVICE_NAME}.service"
 rm -f "${DBUS_PUB}/${SERVICE_NAME}.service"
 
-# Remove service directory (created by postinst)
+# Remove role files
+rm -f "${ROLES_PRV}/${SERVICE_NAME}.json"
+rm -f "${ROLES_PUB}/${SERVICE_NAME}.json"
+
+# Also clean up old "lite" service if present
+rm -f "${DBUS_PRV}/${OLD_SERVICE_NAME}.service"
+rm -f "${DBUS_PUB}/${OLD_SERVICE_NAME}.service"
+rm -f "${ROLES_PRV}/${OLD_SERVICE_NAME}.json"
+rm -f "${ROLES_PUB}/${OLD_SERVICE_NAME}.json"
+
+# Remove service directories (created by postinst)
 rm -rf "${SERVICE_PATH}"
+rm -rf "${OLD_SERVICE_PATH}"
+
+# Stop any running node services
+killall -q node 2>/dev/null || true
 
 echo "WebDAV service unregistered and removed"
 

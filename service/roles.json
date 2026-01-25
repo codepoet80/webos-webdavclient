@@ -1,0 +1,14 @@
+{
+    "role": {
+        "exeName": "js",
+        "type": "regular",
+        "allowedNames": ["com.aventer.webdavclient.service"]
+    },
+    "permissions": [
+        {
+            "service": "com.aventer.webdavclient.service",
+            "inbound": ["*"],
+            "outbound": ["*"]
+        }
+    ]
+}

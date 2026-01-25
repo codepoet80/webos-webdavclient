@@ -2,7 +2,7 @@
     "id": "com.aventer.webdavclient",
     "package_format_version": 2,
     "loc_name": "WebDAV Client",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "vendor": "avEnter, codepoet",
     "vendor_url": "",
     "app": "com.aventer.webdavclient",

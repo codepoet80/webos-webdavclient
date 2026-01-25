@@ -87,9 +87,9 @@ enyo.kind({
             ]}
         ]},
         // Add Server Dialog
-        { kind: "ModalDialog", name: "addServerDialog", onOpen: "addServerDialogOpen", components: [
-            { kind: "Scroller", name: "scrollerServerSetup", height: "320px", components: [
-                { kind: "RowGroup", caption: "Add new WebDAV Server", components: [
+        { kind: "ModalDialog", name: "addServerDialog", onOpen: "addServerDialogOpen", style: "width: 115%; max-width: 460px;", components: [
+            { kind: "Scroller", name: "scrollerServerSetup", height: "352px", components: [
+                { kind: "RowGroup", caption: "Configure WebDAV Server", components: [
                     { kind: "VFlexBox", align: "left", style: "padding: 0px", components: [
                         { kind: "Input", name: "itemName", spellcheck: false, autoWordComplete: false, hint: "Display Name" },
                         { kind: "CustomListSelector", name: "protocol", style: "padding-left:10px;", onChange: "protocolChanged", value: "http", items: [
@@ -97,8 +97,8 @@ enyo.kind({
                             { caption: "HTTPS", value: "https" }
                         ]},
                         { kind: "Input", name: "port", spellcheck: false, autoWordComplete: false, hint: "Port" },
-                        { kind: "Input", name: "servername", disabled: false, spellcheck: false, autoWordComplete: false, autoCapitalize: "lowercase", hint: "Server Name" },
-                        { kind: "Input", name: "serverpath", disabled: false, spellcheck: false, autoWordComplete: false, autoCapitalize: "lowercase", hint: "Server Path (optional)" },
+                        { kind: "Input", name: "servername", disabled: false, spellcheck: false, autoWordComplete: false, autoCapitalize: "lowercase", hint: "Server Address" },
+                        { kind: "Input", name: "serverpath", disabled: false, spellcheck: false, autoWordComplete: false, autoCapitalize: "lowercase", hint: "Path (eg: remote.php/webdav)" },
                         { kind: "Input", name: "username", spellcheck: false, autoWordComplete: false, autoCapitalize: "lowercase", hint: "Username" },
                         { kind: "PasswordInput", name: "password", spellcheck: false, autoWordComplete: false, hint: "Password" },
                         { kind: "HFlexBox", align: "center", style: "padding-top:10px;", components: [
@@ -155,11 +155,12 @@ enyo.kind({
         ]},
         { kind: "FilePicker", name: "uploadFilePicker", onPickFile: "uploadFilePickerResponse" },
 
-        // Palm Service Calls                                   
+        // Palm Service Calls
         { name: "fileDownload", kind: "PalmService", service: "palm://com.palm.downloadmanager/", method: "download", onSuccess: "downloadFileResponse", subscribe: true },
         { name: "fileDownloadCancel", kind: "PalmService", service: "palm://com.palm.downloadmanager/", method: "cancelDownload", onSuccess: "cancelFileSuccess", onFailure: "cancelFileFailure" },
         { name: "fileOpen", kind: "PalmService", service: "palm://com.palm.applicationManager/", method: "open", onSuccess: "downloadFileResponse", subscribe: true },
         { name: "fileSend", kind: "PalmService", service: "palm://com.aventer.webdavclient.service/", method: "sendfile", onSuccess: "sendFileSuccess", onFailure: "sendFileFailure" },
+        { name: "mediaRescan", kind: "PalmService", service: "palm://com.palm.db/", method: "find", onSuccess: "mediaRescanComplete", onFailure: "mediaRescanComplete" },
 
         { name: "myUpdater", kind: "Helpers.Updater" }
     ],
@@ -193,7 +194,6 @@ enyo.kind({
             enyo.log("Found preferences browser storage, skipping database...");
             this.serverData = savedServers;
             this.$.serverList.render();
-            this.$.myUpdater.CheckForUpdate(this, "WebDAV Client HD");
         } else {
             if (!ignoreDB) {
                 enyo.log("No preferences found in browser storage, trying database...");
@@ -210,6 +210,7 @@ enyo.kind({
                 this.showWelcomeMessage();
             }
         }
+        this.$.myUpdater.CheckForUpdate("WebDAV Client HD");
     },
 
     // Handler fuer das auswerten der Serverlist Laden query  
@@ -290,8 +291,14 @@ enyo.kind({
     // Filepicker Dialog anzeigen
     btnClickShowUploadFilePicker: function(inSender, inIndex) {
         if (this.connected) {
-            this.$.uploadFilePicker.pickFile();
+            // Trigger media rescan to refresh file picker cache
+            this.$.mediaRescan.call({ query: { from: "com.palm.media.types:1" } });
         }
+    },
+
+    // Media rescan complete - now show file picker
+    mediaRescanComplete: function(inSender, inResponse) {
+        this.$.uploadFilePicker.pickFile();
     },
 
     // Ausgewaehlte Datei einlesen
@@ -910,7 +917,7 @@ function doGetDirList(path, handler) {
             handler(error, error.errorCode || -1);
         });
     } else {
-        enyo.log("Using XHR for directory listing (service not available)");
+        enyo.warn("[WARNING] Native service not available - falling back to XHR (may fail with authentication)");
         webdav.davReq.getDirList(path, handler);
     }
 }
