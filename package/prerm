@@ -3,7 +3,7 @@
 # Pre-removal script for WebDAV Client
 # Unregisters the D-BUS service and removes service files
 
-SERVICE_NAME="com.aventer.webdavclientlite.service"
+SERVICE_NAME="com.aventer.webdavclient.service"
 SERVICE_PATH="/media/cryptofs/apps/usr/palm/services/${SERVICE_NAME}"
 DBUS_PRV="/var/palm/ls2/services/prv"
 DBUS_PUB="/var/palm/ls2/services/pub"

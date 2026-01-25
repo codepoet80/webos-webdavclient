@@ -1,5 +1,5 @@
 {
-    "id": "com.aventer.webdavclientlite",
+    "id": "com.aventer.webdavclient",
     "version": "0.7.0",
     "vendor": "avEnter, codepoet",
     "type": "web",
@@ -8,5 +8,5 @@
     "icon": "icon.png",
 	"splashicon": "icon-256.png",
     "uiRevision": "2",
-    "serviceId": "com.aventer.webdavclientlite.service"
+    "serviceId": "com.aventer.webdavclient.service"
 }

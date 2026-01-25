@@ -8,7 +8,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-APP_ID="com.aventer.webdavclientlite"
+APP_ID="com.aventer.webdavclient"
 
 echo "=== WebDAV Client Build ==="
 

@@ -159,7 +159,7 @@ enyo.kind({
         { name: "fileDownload", kind: "PalmService", service: "palm://com.palm.downloadmanager/", method: "download", onSuccess: "downloadFileResponse", subscribe: true },
         { name: "fileDownloadCancel", kind: "PalmService", service: "palm://com.palm.downloadmanager/", method: "cancelDownload", onSuccess: "cancelFileSuccess", onFailure: "cancelFileFailure" },
         { name: "fileOpen", kind: "PalmService", service: "palm://com.palm.applicationManager/", method: "open", onSuccess: "downloadFileResponse", subscribe: true },
-        { name: "fileSend", kind: "PalmService", service: "palm://com.aventer.webdavclientlite.service/", method: "sendfile", onSuccess: "sendFileSuccess", onFailure: "sendFileFailure" },
+        { name: "fileSend", kind: "PalmService", service: "palm://com.aventer.webdavclient.service/", method: "sendfile", onSuccess: "sendFileSuccess", onFailure: "sendFileFailure" },
 
         { name: "myUpdater", kind: "Helpers.Updater" }
     ],
@@ -851,17 +851,24 @@ enyo.kind({
 
 // request Handler fuer das Auslesen des WebDav Verzeichnisses. Diese Funktion wird aus der davAPI aufgerufen
 // content = JSON Object mit folgendem Aufbau {path:, filename, creationdate:, lastmodified:, contenttype:}
+// For errors: content = "error" or error object, requestState = error code or -1
 function getDirListContent(content, requestState) {
-    if (content && requestState == 4) {
+    if (content && content !== "error" && requestState == 4) {
         webdav.connected = true;
         //webdav.$.dirListScroller.scrollTo(0);
         webdav.$.spinner.hide();
         webdav.dirListData = content
         webdav.$.dirList.render();
     } else {
-        if ((requestState <= 0 && content != null) || requestState > 4) {
-            enyo.windows.addBannerMessage("HTTP Error retreiving directory list!", "{}");
-            webdav.$.spinner.hide();
+        // Error case
+        webdav.$.spinner.hide();
+        webdav.connected = false;
+
+        // Check if content is an error object with errorText
+        if (content && content.errorText) {
+            webdav.showInfoMessage(content.errorText);
+        } else if (content === "error" || requestState !== 4) {
+            webdav.showInfoMessage("Failed to connect to server. Please check your settings and credentials.");
         }
     }
 }
@@ -899,7 +906,8 @@ function doGetDirList(path, handler) {
             }
         }, function(error) {
             enyo.warn("Native service list failed: " + JSON.stringify(error));
-            handler("error", error.errorCode || -1);
+            // Pass error object so handler can display errorText
+            handler(error, error.errorCode || -1);
         });
     } else {
         enyo.log("Using XHR for directory listing (service not available)");

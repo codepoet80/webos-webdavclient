@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a webOS WebDAV client application built with the Enyo 1.0 framework. It provides a file browser interface for accessing WebDAV servers from legacy webOS devices (TouchPad, Pre3). The app ID is `com.aventer.webdavclientlite`.
+This is a webOS WebDAV client application built with the Enyo 1.0 framework. It provides a file browser interface for accessing WebDAV servers from legacy webOS devices (TouchPad, Pre3). The app ID is `com.aventer.webdavclient`.
 
 ## Development Environment
 

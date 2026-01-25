@@ -1,9 +1,9 @@
 {
-    "id": "com.aventer.webdavclientlite.service",
+    "id": "com.aventer.webdavclient.service",
     "description": "WebDAV Client File Transfer Service",
     "commandTimeout": 600000,
     "services": [{
-        "name": "com.aventer.webdavclientlite.service",
+        "name": "com.aventer.webdavclient.service",
         "description": "Authenticated file transfers via curl/wget",
         "commands": [{
             "name": "status",

@@ -5,7 +5,7 @@
  */
 
 var WebDavService = function() {
-    this.serviceUri = "palm://com.aventer.webdavclientlite.service/";
+    this.serviceUri = "palm://com.aventer.webdavclient.service/";
     this.serviceAvailable = null; // null = unknown, true/false after check
 };
 

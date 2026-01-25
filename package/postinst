@@ -3,30 +3,34 @@
 # Post-installation script for WebDAV Client
 # Copies service files and registers the D-BUS service
 
-APP_NAME="com.aventer.webdavclientlite"
-SERVICE_NAME="com.aventer.webdavclientlite.service"
+APP_NAME="com.aventer.webdavclient"
+SERVICE_NAME="com.aventer.webdavclient.service"
 APP_PATH="/media/cryptofs/apps/usr/palm/applications/${APP_NAME}"
 SERVICE_PATH="/media/cryptofs/apps/usr/palm/services/${SERVICE_NAME}"
 DBUS_PRV="/var/palm/ls2/services/prv"
 DBUS_PUB="/var/palm/ls2/services/pub"
 
-# Create service directory if it doesn't exist
+# Remove old service files to ensure clean update
+rm -rf "${SERVICE_PATH}"
+
+# Create service directory
 mkdir -p "${SERVICE_PATH}"
 
 # Copy service files from app directory to services directory
 if [ -d "${APP_PATH}/service" ]; then
-    cp "${APP_PATH}/service/"*.js "${SERVICE_PATH}/"
-    cp "${APP_PATH}/service/"*.json "${SERVICE_PATH}/"
-    cp "${APP_PATH}/service/dbus" "${SERVICE_PATH}/"
-    echo "Service files copied to ${SERVICE_PATH}"
+    cp -f "${APP_PATH}/service/"*.js "${SERVICE_PATH}/"
+    cp -f "${APP_PATH}/service/"*.json "${SERVICE_PATH}/"
+    cp -f "${APP_PATH}/service/dbus" "${SERVICE_PATH}/"
+    echo "Service files installed to ${SERVICE_PATH}"
 else
-    echo "Warning: App service directory not found at ${APP_PATH}/service"
+    echo "ERROR: App service directory not found at ${APP_PATH}/service"
+    exit 1
 fi
 
 # Register D-BUS service
 if [ -f "${SERVICE_PATH}/dbus" ]; then
-    cp "${SERVICE_PATH}/dbus" "${DBUS_PRV}/${SERVICE_NAME}.service"
-    cp "${SERVICE_PATH}/dbus" "${DBUS_PUB}/${SERVICE_NAME}.service"
+    cp -f "${SERVICE_PATH}/dbus" "${DBUS_PRV}/${SERVICE_NAME}.service"
+    cp -f "${SERVICE_PATH}/dbus" "${DBUS_PUB}/${SERVICE_NAME}.service"
 
     # Set permissions
     chmod 644 "${DBUS_PRV}/${SERVICE_NAME}.service"
@@ -34,14 +38,17 @@ if [ -f "${SERVICE_PATH}/dbus" ]; then
 
     echo "D-BUS service registered successfully"
 else
-    echo "Warning: D-BUS service file not found"
+    echo "ERROR: D-BUS service file not found"
+    exit 1
 fi
 
 # Set service directory permissions
-if [ -d "${SERVICE_PATH}" ]; then
-    chmod 755 "${SERVICE_PATH}"
-    chmod 644 "${SERVICE_PATH}"/*.js 2>/dev/null
-    chmod 644 "${SERVICE_PATH}"/*.json 2>/dev/null
-fi
+chmod 755 "${SERVICE_PATH}"
+chmod 644 "${SERVICE_PATH}"/*.js 2>/dev/null
+chmod 644 "${SERVICE_PATH}"/*.json 2>/dev/null
 
+# Restart the service if it's running (to pick up new code)
+killall -q node 2>/dev/null || true
+
+echo "WebDAV Client service installation complete"
 exit 0

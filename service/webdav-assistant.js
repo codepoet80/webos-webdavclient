@@ -62,6 +62,61 @@ function mkdirp(dirpath) {
     }
 }
 
+// Helper to get user-friendly error message from HTTP status code
+function getHttpErrorMessage(httpCode, operation) {
+    var code = parseInt(httpCode, 10);
+    if (isNaN(code)) return null;
+
+    switch (code) {
+        case 401:
+            return "Authentication failed. Please check your username and password.";
+        case 403:
+            return "Access denied. Your credentials may be incorrect or you don't have permission for this operation.";
+        case 404:
+            return "Resource not found. The file or folder may have been moved or deleted.";
+        case 405:
+            return "Operation not supported by the server.";
+        case 409:
+            return "Conflict. The parent folder may not exist, or a resource with that name already exists.";
+        case 412:
+            return "Precondition failed. The resource may have been modified.";
+        case 423:
+            return "Resource is locked by another user or process.";
+        case 507:
+            return "Insufficient storage on the server.";
+        default:
+            if (code >= 500) {
+                return "Server error (HTTP " + code + "). Please try again later.";
+            } else if (code >= 400) {
+                return "Request failed (HTTP " + code + ").";
+            }
+            return null;
+    }
+}
+
+// Helper to build error result with user-friendly message
+function buildErrorResult(operation, httpCode, stderr, errorMessage) {
+    var friendlyMessage = getHttpErrorMessage(httpCode, operation);
+    var errorText;
+
+    if (friendlyMessage) {
+        errorText = friendlyMessage;
+    } else if (stderr && stderr.trim()) {
+        errorText = operation + " failed: " + stderr.trim();
+    } else if (errorMessage) {
+        errorText = operation + " failed: " + errorMessage;
+    } else {
+        errorText = operation + " failed.";
+    }
+
+    return {
+        returnValue: false,
+        errorCode: parseInt(httpCode, 10) || -1,
+        errorText: errorText,
+        httpCode: httpCode
+    };
+}
+
 var SERVICE_VERSION = "1.0.0";
 var PREFS_PATH = "/media/internal/.webdavclient-prefs.json";
 
@@ -208,25 +263,11 @@ DownloadAssistant.prototype.run = function(future, subscription) {
                 // Ignore cleanup errors
             }
 
-            var errorText = "Download failed";
-            if (stderr) {
-                errorText += ": " + stderr;
-            } else if (error.message) {
-                errorText += ": " + error.message;
-            }
-
             // Parse curl HTTP code from stdout if available
             var httpCode = stdout ? stdout.trim() : "";
-            if (httpCode && !isNaN(parseInt(httpCode))) {
-                errorText += " (HTTP " + httpCode + ")";
-            }
-
-            future.result = {
-                returnValue: false,
-                errorCode: error.code || -1,
-                errorText: errorText,
-                completed: true
-            };
+            var result = buildErrorResult("Download", httpCode, stderr, error.message);
+            result.completed = true;
+            future.result = result;
         } else {
             // Verify file was actually downloaded
             var fileExists = false;
@@ -346,24 +387,10 @@ UploadAssistant.prototype.run = function(future) {
     // Execute upload
     cmd.exec(command, function(error, stdout, stderr) {
         if (error) {
-            var errorText = "Upload failed";
-            if (stderr) {
-                errorText += ": " + stderr;
-            } else if (error.message) {
-                errorText += ": " + error.message;
-            }
-
             var httpCode = stdout ? stdout.trim() : "";
-            if (httpCode && !isNaN(parseInt(httpCode))) {
-                errorText += " (HTTP " + httpCode + ")";
-            }
-
-            future.result = {
-                returnValue: false,
-                errorCode: error.code || -1,
-                errorText: errorText,
-                finish: false
-            };
+            var result = buildErrorResult("Upload", httpCode, stderr, error.message);
+            result.finish = false;
+            future.result = result;
         } else {
             future.result = {
                 returnValue: true,
@@ -429,25 +456,17 @@ MkdirAssistant.prototype.run = function(future) {
 
     cmd.exec(command, function(error, stdout, stderr) {
         if (error) {
-            var errorText = "Failed to create directory";
-            if (stderr) {
-                errorText += ": " + stderr;
-            }
-
             var httpCode = stdout ? stdout.trim() : "";
-            if (httpCode && !isNaN(parseInt(httpCode))) {
-                if (httpCode === "405") {
-                    errorText = "Directory already exists";
-                } else {
-                    errorText += " (HTTP " + httpCode + ")";
-                }
+            // Special case: 405 means directory already exists for MKCOL
+            if (httpCode === "405") {
+                future.result = {
+                    returnValue: false,
+                    errorCode: 405,
+                    errorText: "Directory already exists."
+                };
+            } else {
+                future.result = buildErrorResult("Create directory", httpCode, stderr, error.message);
             }
-
-            future.result = {
-                returnValue: false,
-                errorCode: error.code || -1,
-                errorText: errorText
-            };
         } else {
             future.result = {
                 returnValue: true
@@ -507,25 +526,8 @@ DeleteAssistant.prototype.run = function(future) {
 
     cmd.exec(command, function(error, stdout, stderr) {
         if (error) {
-            var errorText = "Failed to delete";
-            if (stderr) {
-                errorText += ": " + stderr;
-            }
-
             var httpCode = stdout ? stdout.trim() : "";
-            if (httpCode && !isNaN(parseInt(httpCode))) {
-                if (httpCode === "404") {
-                    errorText = "Resource not found";
-                } else {
-                    errorText += " (HTTP " + httpCode + ")";
-                }
-            }
-
-            future.result = {
-                returnValue: false,
-                errorCode: error.code || -1,
-                errorText: errorText
-            };
+            future.result = buildErrorResult("Delete", httpCode, stderr, error.message);
         } else {
             future.result = {
                 returnValue: true
@@ -591,9 +593,13 @@ ListAssistant.prototype.run = function(future) {
     var propfindXml = '<?xml version="1.0" encoding="utf-8" ?><D:propfind xmlns:D="DAV:"><D:allprop /></D:propfind>';
 
     // Build curl command manually for PROPFIND
+    // Use -f to fail on HTTP errors, -S to show errors, -s for silent (no progress)
+    // Use -w to append HTTP code at end with separator for parsing
     var curlArgs = ["/usr/bin/curl"];
     curlArgs.push("-k"); // Skip SSL verification
-    curlArgs.push("-s"); // Silent mode
+    curlArgs.push("-s"); // Silent mode (no progress)
+    curlArgs.push("-S"); // Show errors
+    curlArgs.push("-f"); // Fail on HTTP errors
 
     // Bypass proxy if useProxy is false
     if (args.useProxy === false) {
@@ -604,27 +610,32 @@ ListAssistant.prototype.run = function(future) {
     curlArgs.push("-H", '"Depth: 1"');
     curlArgs.push("-H", '"Content-Type: application/xml"');
     curlArgs.push("-d", "'" + propfindXml + "'");
+    curlArgs.push("-w", '"\\n__HTTP_CODE__:%{http_code}"'); // Append HTTP code with separator
     curlArgs.push('"' + cmd.shellEscape(finalUrl) + '"');
 
     var command = curlArgs.join(" ");
     console.log("[WebDAV] List command: " + command.replace(/:[^@]+@/, ':***@'));
 
     cmd.exec(command, function(error, stdout, stderr) {
+        // Parse HTTP code from output (appended at end)
+        var httpCode = null;
+        var responseBody = stdout || "";
+        var httpCodeMatch = responseBody.match(/__HTTP_CODE__:(\d+)$/);
+        if (httpCodeMatch) {
+            httpCode = httpCodeMatch[1];
+            responseBody = responseBody.replace(/\n?__HTTP_CODE__:\d+$/, "");
+        }
+
         if (error) {
-            var errorText = "Failed to list directory";
-            if (stderr) {
-                errorText += ": " + stderr;
-            }
-            future.result = {
-                returnValue: false,
-                errorCode: error.code || -1,
-                errorText: errorText
-            };
+            future.result = buildErrorResult("List directory", httpCode, stderr, error.message);
+        } else if (httpCode && parseInt(httpCode, 10) >= 400) {
+            // HTTP error but curl didn't fail (shouldn't happen with -f, but just in case)
+            future.result = buildErrorResult("List directory", httpCode, stderr, null);
         } else {
             // Return the raw XML response - the UI will parse it
             future.result = {
                 returnValue: true,
-                response: stdout,
+                response: responseBody,
                 contentType: "application/xml"
             };
         }
