@@ -108,6 +108,20 @@ The postinst script handles service registration:
 3. Installs role files in `/var/palm/ls2/roles/{prv,pub}/` for Luna permissions
 4. Runs `ls-control scan-services` to refresh service registry
 
+## Platform Workarounds
+
+This app required several workarounds for webOS platform limitations:
+
+1. **webOS download manager ignores auth credentials**: The built-in `palm://com.palm.downloadmanager` doesn't properly pass HTTP Basic Auth to ownCloud/NextCloud servers. **Solution**: Native service that calls curl directly with `-u` flag.
+
+2. **palm-package doesn't include postinst/prerm**: The SDK's `palm-package` tool doesn't add install scripts to the IPK control archive. **Solution**: `build.sh` manually extracts the IPK, injects the scripts into `control.tar.gz`, and rebuilds.
+
+3. **Standard service runner has jail issues**: Using `run-js-service -n` causes jail mount failures for third-party services. **Solution**: Use `run-homebrew-js-service` from the homebrew infrastructure instead.
+
+4. **Luna Service Bus requires role files**: D-BUS registration alone isn't enough - services need role files in `/var/palm/ls2/roles/` to allow inbound connections. **Solution**: `postinst` installs `roles.json` to both prv and pub directories.
+
+5. **palm-install doesn't run postinst**: The SDK's `palm-install` skips post-install scripts. **Solution**: Must install via webOS Quick Install which properly executes package scripts.
+
 ## Dependencies
 
 - webOS homebrew infrastructure (provides `run-homebrew-js-service`)
