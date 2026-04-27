@@ -316,7 +316,7 @@ enyo.kind({
                 protocol: this.currentServer.protocol,
                 server: this.currentServer.servername,
                 port: this.currentServer.port,
-                serverpath: this.currentServer.serverpath,
+                serverpath: "",
                 path: this.currentPath + "/" + targetFilename,
                 username: this.currentServer.username,
                 password: this.currentServer.password,
@@ -331,6 +331,9 @@ enyo.kind({
                 // Failure
                 self.$.spinner.hide();
                 var errorMsg = response.errorText || "Upload failed";
+                if (response.errorCode === 405) {
+                    errorMsg += " Try navigating into a folder before uploading.";
+                }
                 self.showInfoMessage("Error: " + errorMsg);
             });
         }
@@ -885,7 +888,7 @@ function doGetDirList(path, handler) {
     // Use per-server useProxy setting, default to true for backwards compatibility
     var useProxy = webdav.currentServer.useProxy !== false;
 
-    if (webdav.serviceAvailable) {
+    if (webdav.webdavService && webdav.webdavService.serviceAvailable !== false) {
         enyo.log("Using native service for directory listing (curl, useProxy=" + useProxy + ")");
         // Don't pass serverpath if path already contains it (to avoid duplication)
         var serverpath = "";

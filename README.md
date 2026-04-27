@@ -44,7 +44,20 @@ The service requires the webOS homebrew infrastructure (`run-homebrew-js-service
 
 ## Server Setup
 
-This app depends on a WebDAV server of some kind. You may choose to setup a WebDAV server to proxy your Cloud drive storage from a computer in your local area network, allowing webOS mobile devices (like TouchPad or Pre3) to access those files. As an example, I've documented how to setup the excellent open source [WebDAV server Dave](https://github.com/micromata/dave), to serve this purpose...
+This app works with any WebDAV server — including ownCloud, NextCloud, and lightweight proxy servers. A common approach is to run a WebDAV server on a computer in your local network to proxy cloud storage (OneDrive, Dropbox, etc.) to your webOS device.
+
+### ownCloud / NextCloud
+
+Direct connection to ownCloud or NextCloud is supported and well-tested. A few things to be aware of:
+
+- **Server Path**: Use `remote.php/webdav` (legacy endpoint) for the Server Path field. Example: server `192.168.1.10`, path `remote.php/webdav`.
+- **Passwords with special characters**: Passwords containing `!` or other shell-special characters work fine. However, if your ownCloud account uses two-factor authentication, you must generate an **App Password** (Settings → Security → App Passwords) rather than using your account password directly.
+- **Uploading**: Uploading to the root of the WebDAV share is not supported by ownCloud/NextCloud — navigate into a folder before uploading.
+- **Proxy**: If connecting to a server on your local network, uncheck "Use System Proxy" in the server settings.
+
+### Dave (lightweight local WebDAV proxy)
+
+[Dave](https://github.com/micromata/dave) is a simple cross-platform WebDAV server, useful for proxying a local folder (such as a cloud-synced OneDrive or Dropbox folder) over WebDAV to your webOS device. This is a good option if you want to access files from a PC on your home network rather than connecting directly to a cloud service.
 
 ### Download and Install Dave on your Computer
 

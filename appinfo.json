@@ -1,6 +1,6 @@
 {
     "id": "com.aventer.webdavclient",
-    "version": "0.7.0",
+    "version": "0.7.1",
     "vendor": "avEnter, codepoet",
     "type": "web",
     "main": "index.html",

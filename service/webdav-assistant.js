@@ -244,12 +244,12 @@ DownloadAssistant.prototype.run = function(future, subscription) {
             outputFile: args.localPath,
             method: "GET",
             insecure: true,
-            embedCredentials: true,  // Embed in URL for better proxy compatibility
+            embedCredentials: true,
             noProxy: !useProxy  // Bypass proxy if useProxy is false
         });
     }
 
-    console.log("[WebDAV] Download command: " + command.replace(/password[^"]*"[^"]*"/, 'password="***"'));
+    console.log("[WebDAV] Download command: " + command.replace(/"[^"]*:[^"]*"/, '"***:***"'));
 
     // Execute download with longer timeout (10 minutes)
     cmd.exec(command, function(error, stdout, stderr) {
@@ -371,18 +371,19 @@ UploadAssistant.prototype.run = function(future) {
     }
 
     // Build curl command (wget doesn't support PUT uploads)
+    // Note: embedCredentials is intentionally omitted here — old webOS curl has a quirk
+    // where URL-embedded credentials don't work for PUT, but -u flag does.
     var command = cmd.buildCurlCommand({
         url: url,
         username: args.username,
         password: args.password,
         inputFile: args.localPath,
         method: "PUT",
-        embedCredentials: true,  // Embed in URL for better proxy compatibility
         insecure: true,
-        noProxy: args.useProxy === false  // Bypass proxy if user disabled it
+        noProxy: args.useProxy === false
     });
 
-    console.log("[WebDAV] Upload command: " + command.replace(/password[^"]*"[^"]*"/, 'password="***"'));
+    console.log("[WebDAV] Upload command: " + command.replace(/-u "[^"]*"/, '-u "***:***"'));
 
     // Execute upload
     cmd.exec(command, function(error, stdout, stderr) {
@@ -447,8 +448,8 @@ MkdirAssistant.prototype.run = function(future) {
         username: args.username,
         password: args.password,
         method: "MKCOL",
-        insecure: true,
         embedCredentials: true,
+        insecure: true,
         noProxy: args.useProxy === false
     });
 
@@ -517,8 +518,8 @@ DeleteAssistant.prototype.run = function(future) {
         username: args.username,
         password: args.password,
         method: "DELETE",
-        insecure: true,
         embedCredentials: true,
+        insecure: true,
         noProxy: args.useProxy === false
     });
 
@@ -592,16 +593,12 @@ ListAssistant.prototype.run = function(future) {
     // Build PROPFIND XML body
     var propfindXml = '<?xml version="1.0" encoding="utf-8" ?><D:propfind xmlns:D="DAV:"><D:allprop /></D:propfind>';
 
-    // Build curl command manually for PROPFIND
-    // Use -f to fail on HTTP errors, -S to show errors, -s for silent (no progress)
-    // Use -w to append HTTP code at end with separator for parsing
     var curlArgs = ["/usr/bin/curl"];
-    curlArgs.push("-k"); // Skip SSL verification
-    curlArgs.push("-s"); // Silent mode (no progress)
-    curlArgs.push("-S"); // Show errors
-    curlArgs.push("-f"); // Fail on HTTP errors
+    curlArgs.push("-k");
+    curlArgs.push("-s");
+    curlArgs.push("-S");
+    curlArgs.push("-f");
 
-    // Bypass proxy if useProxy is false
     if (args.useProxy === false) {
         curlArgs.push("--noproxy", '"*"');
     }
@@ -610,7 +607,7 @@ ListAssistant.prototype.run = function(future) {
     curlArgs.push("-H", '"Depth: 1"');
     curlArgs.push("-H", '"Content-Type: application/xml"');
     curlArgs.push("-d", "'" + propfindXml + "'");
-    curlArgs.push("-w", '"\\n__HTTP_CODE__:%{http_code}"'); // Append HTTP code with separator
+    curlArgs.push("-w", '"\\n__HTTP_CODE__:%{http_code}"');
     curlArgs.push('"' + cmd.shellEscape(finalUrl) + '"');
 
     var command = curlArgs.join(" ");

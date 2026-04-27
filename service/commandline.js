@@ -103,8 +103,8 @@ CommandLine.prototype.buildCurlCommand = function(options) {
     // HTTP method
     if (options.method && options.method !== "GET") {
         if (options.method === "PUT" && options.inputFile) {
-            // For uploads, use -T (upload-file)
-            args.push("-T", '"' + this.shellEscape(options.inputFile) + '"');
+            args.push("-X", "PUT");
+            args.push("--data-binary", '"@' + this.shellEscape(options.inputFile) + '"');
         } else {
             args.push("-X", options.method);
         }
@@ -179,8 +179,7 @@ CommandLine.prototype.shellEscape = function(str) {
         .replace(/\\/g, '\\\\')
         .replace(/"/g, '\\"')
         .replace(/\$/g, '\\$')
-        .replace(/`/g, '\\`')
-        .replace(/!/g, '\\!');
+        .replace(/`/g, '\\`');
 };
 
 /**

@@ -157,8 +157,6 @@ function davApi() {
                     enyo.log("Unexpected HTTP response to directory list!");
                     handler("error", request.status);
                 }
-            } else {
-                handler(null, request.readyState);
             }
         }
         enyo.log("sending " + xml);
